@@ -1,0 +1,6 @@
+# Ignore during build
+node_modules
+.next
+
+# macOS
+.DS_Store
