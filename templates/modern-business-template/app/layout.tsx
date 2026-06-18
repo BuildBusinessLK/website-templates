@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'BuildBusinessLK — Business site',
-  description: 'Public business microsite powered by BuildBusinessLK',
+  title: 'Coconut Template -1 — BuildBusinessLK',
+  description: 'Coconut Template -1 public business microsite powered by BuildBusinessLK',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
           boxSizing: 'border-box',
+          background: '#f8fafc',
         }}
       >
         {children}
