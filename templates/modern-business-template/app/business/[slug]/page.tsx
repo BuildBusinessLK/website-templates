@@ -29,6 +29,10 @@ interface BusinessData {
   phone?: string;
   products?: Product[];
   socialLinks?: SocialLink[];
+  businessHoursOpen?: string;
+  businessHoursClose?: string;
+  workingDays?: string;
+  googleMapsUrl?: string;
 }
 
 async function fetchBusiness(slug: string): Promise<BusinessData | null> {

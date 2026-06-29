@@ -29,6 +29,11 @@ export interface BusinessData {
   phone?: string;
   products?: Product[];
   socialLinks?: SocialLink[];
+  // New operational columns
+  businessHoursOpen?: string;
+  businessHoursClose?: string;
+  workingDays?: string;
+  googleMapsUrl?: string;
 }
 
 interface CartItem {
@@ -69,9 +74,56 @@ function getSocialIcon(platform: string) {
   );
 }
 
+function getOpenStatus(
+  openTime?: string,
+  closeTime?: string,
+  workingDays?: string
+): { isOpen: boolean; text: string } {
+  if (!openTime || !closeTime) {
+    return { isOpen: true, text: "Always Open" };
+  }
+
+  const now = new Date();
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const currentDayName = days[now.getDay()];
+
+  if (workingDays) {
+    const activeDays = workingDays.split(',').map(d => d.trim().toLowerCase());
+    if (activeDays.length > 0 && !activeDays.includes(currentDayName.toLowerCase())) {
+      return { isOpen: false, text: `Closed Today (Hours: ${openTime} - ${closeTime})` };
+    }
+  }
+
+  const parseTime = (t: string) => {
+    const parts = t.split(':').map(Number);
+    const h = parts[0] || 0;
+    const m = parts[1] || 0;
+    return h * 60 + m;
+  };
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const openMinutes = parseTime(openTime);
+  const closeMinutes = parseTime(closeTime);
+
+  if (openMinutes <= closeMinutes) {
+    if (currentMinutes >= openMinutes && currentMinutes <= closeMinutes) {
+      return { isOpen: true, text: `Open Now (Closes at ${closeTime})` };
+    } else {
+      return { isOpen: false, text: `Closed Now (Hours: ${openTime} - ${closeTime})` };
+    }
+  } else {
+    if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) {
+      return { isOpen: true, text: `Open Now (Closes at ${closeTime})` };
+    } else {
+      return { isOpen: false, text: `Closed Now (Hours: ${openTime} - ${closeTime})` };
+    }
+  }
+}
+
 export default function ClientBusinessPage({ data }: { data: BusinessData }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const getProductKey = (p: Product) => p.id?.toString() ?? p.name;
 
@@ -110,6 +162,18 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     setCart((prev) => prev.filter((item) => getProductKey(item.product) !== key));
   };
 
+  const formatPhoneNumber = (phone: string) => {
+    let cleanPhone = phone.replace(/[^\d+]/g, '');
+    if (!cleanPhone.startsWith('+')) {
+      if (cleanPhone.startsWith('0')) {
+        cleanPhone = '+94' + cleanPhone.substring(1);
+      } else {
+        cleanPhone = '+94' + cleanPhone;
+      }
+    }
+    return cleanPhone.replace('+', '');
+  };
+
   const handleCheckout = () => {
     const businessName = data.businessName || 'Business';
     let message = `Hello! I would like to place an order from ${businessName} via BuildBusinessLK:\n\n`;
@@ -131,16 +195,9 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     const encodedMessage = encodeURIComponent(message);
 
     if (data.phone) {
-      let cleanPhone = data.phone.replace(/[^\d+]/g, '');
-      if (!cleanPhone.startsWith('+')) {
-        if (cleanPhone.startsWith('0')) {
-          cleanPhone = '+94' + cleanPhone.substring(1);
-        } else {
-          cleanPhone = '+94' + cleanPhone;
-        }
-      }
+      const cleanPhone = formatPhoneNumber(data.phone);
       window.open(
-        `https://wa.me/${cleanPhone.replace('+', '')}?text=${encodedMessage}`,
+        `https://wa.me/${cleanPhone}?text=${encodedMessage}`,
         '_blank'
       );
     } else if (data.contactEmail) {
@@ -157,19 +214,59 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     }
   };
 
+  const handleDirectBuy = (product: Product) => {
+    const businessName = data.businessName || 'Business';
+    const priceStr = product.price != null ? ` (LKR ${product.price.toLocaleString()})` : '';
+    const message = `Hello! I would like to buy this product directly from ${businessName} via BuildBusinessLK:\n\n- ${product.name} x1${priceStr}\n\nPlease let me know how to proceed.`;
+    const encodedMessage = encodeURIComponent(message);
+
+    if (data.phone) {
+      const cleanPhone = formatPhoneNumber(data.phone);
+      window.open(`https://wa.me/${cleanPhone}?text=${encodedMessage}`, '_blank');
+    } else if (data.contactEmail) {
+      window.open(
+        `mailto:${data.contactEmail}?subject=Direct Purchase: ${encodeURIComponent(
+          product.name
+        )}&body=${encodedMessage}`,
+        '_blank'
+      );
+    } else {
+      alert(`Direct order summary:\n\n${message}`);
+    }
+  };
+
   const primary = data.primaryColor || '#15803d';
   const secondary = data.secondaryColor || '#ca8a04';
   const font = `system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const faqs = [
+    {
+      q: "How do I place an order?",
+      a: `You can add items to your cart and click "Checkout via WhatsApp" to send your order list directly to the owner. Alternatively, you can click "Buy Now" on any product to purchase it directly.`
+    },
+    {
+      q: "What payment methods are supported?",
+      a: "We support Cash on Delivery (COD) and Direct Bank Transfer. Detailed payment instructions will be shared with you on WhatsApp once the order is confirmed."
+    },
+    {
+      q: "Do you offer island-wide delivery?",
+      a: "Yes! We ship all across Sri Lanka. Delivery times typically range between 2 to 5 business days depending on your location."
+    },
+    {
+      q: "Can I request custom product packaging or engraving?",
+      a: `Absolutely! Since our ornaments and products are handcrafted locally, we welcome custom requests. Please mention your custom requirements during checkout on WhatsApp.`
+    }
+  ];
+
   return (
     <main
       id="home"
       style={{
         minHeight: '100vh',
-        background: '#f8fafc', // Premium off-white base
-        color: '#1e293b', // Slate-800 text
+        background: '#f8fafc',
+        color: '#1e293b',
         fontFamily: font,
         position: 'relative',
         overflowX: 'hidden',
@@ -210,7 +307,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
           position: 'sticky',
           top: 0,
           zIndex: 40,
-          background: 'rgba(255, 255, 255, 0.85)', // Light glassmorphism
+          background: 'rgba(255, 255, 255, 0.85)',
           backdropFilter: 'blur(20px)',
           borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
           padding: '16px 24px',
@@ -244,6 +341,9 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             </a>
             <a href="#products" className="nav-link">
               Products
+            </a>
+            <a href="#faq" className="nav-link">
+              FAQs
             </a>
             <a href="#about" className="nav-link">
               About us
@@ -342,6 +442,40 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             }}
           >
             <div>
+              {/* Dynamic Status Badge */}
+              {(() => {
+                const status = getOpenStatus(data.businessHoursOpen, data.businessHoursClose, data.workingDays);
+                return (
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: status.isOpen ? 'rgba(34, 197, 94, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                      color: status.isOpen ? '#4ade80' : '#f87171',
+                      padding: '6px 14px',
+                      borderRadius: 999,
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      border: `1px solid ${status.isOpen ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                      marginBottom: 16,
+                      backdropFilter: 'blur(4px)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        background: status.isOpen ? '#22c55e' : '#ef4444',
+                        boxShadow: status.isOpen ? '0 0 8px #22c55e' : '0 0 8px #ef4444',
+                      }}
+                    />
+                    {status.text}
+                  </div>
+                );
+              })()}
+
               <div
                 style={{
                   display: 'flex',
@@ -500,7 +634,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                   <article
                     key={pKey}
                     style={{
-                      background: '#ffffff', // Clean white background for cards
+                      background: '#ffffff',
                       border: '1px solid rgba(0, 0, 0, 0.05)',
                       borderRadius: 20,
                       overflow: 'hidden',
@@ -549,7 +683,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                         style={{
                           width: '100%',
                           height: 220,
-                          background: '#f1f5f9', // Light placeholder base
+                          background: '#f1f5f9',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -565,7 +699,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                         <p
                           style={{
                             margin: '0 0 16px',
-                            color: '#475569', // Slate-600
+                            color: '#475569',
                             fontSize: '0.95rem',
                             lineHeight: 1.6,
                           }}
@@ -648,36 +782,55 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => addToCart(p)}
-                            style={{
-                              background: secondary,
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: 999,
-                              padding: '8px 18px',
-                              fontWeight: 700,
-                              fontSize: '0.85rem',
-                              cursor: 'pointer',
-                              boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-                              transition: 'all 0.2s ease',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.transform = 'translateY(-2px)';
-                              e.currentTarget.style.boxShadow =
-                                '0 6px 14px rgba(0,0,0,0.18)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'translateY(0)';
-                              e.currentTarget.style.boxShadow =
-                                '0 4px 10px rgba(0,0,0,0.1)';
-                            }}
-                          >
-                            🛒 Add
-                          </button>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              onClick={() => addToCart(p)}
+                              style={{
+                                background: 'rgba(0, 0, 0, 0.05)',
+                                color: '#0f172a',
+                                border: '1px solid rgba(0, 0, 0, 0.08)',
+                                borderRadius: 999,
+                                padding: '8px 14px',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(0,0,0,0.08)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'rgba(0,0,0,0.05)';
+                              }}
+                            >
+                              🛒 Add
+                            </button>
+                            <button
+                              onClick={() => handleDirectBuy(p)}
+                              style={{
+                                background: secondary,
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: 999,
+                                padding: '8px 14px',
+                                fontWeight: 700,
+                                fontSize: '0.8rem',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+                                transition: 'all 0.2s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                e.currentTarget.style.boxShadow = '0 6px 14px rgba(0,0,0,0.12)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.05)';
+                              }}
+                            >
+                              ⚡ Buy Now
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -687,6 +840,76 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             </div>
           </section>
         )}
+
+        {/* FAQ Section */}
+        <section id="faq" style={{ marginBottom: 64 }}>
+          <h2
+            style={{
+              fontSize: '1.6rem',
+              fontWeight: 900,
+              color: '#0f172a',
+              marginBottom: 24,
+              paddingBottom: 10,
+              borderBottom: `3px solid ${primary}`,
+              display: 'inline-block',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            Frequently asked questions
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {faqs.map((faq, idx) => {
+              const isOpen = openFaq === idx;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid rgba(0, 0, 0, 0.05)',
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <button
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '18px 24px',
+                      background: 'none',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '1rem',
+                      color: '#0f172a',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>{faq.q}</span>
+                    <span style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>
+                      ▼
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div
+                      style={{
+                        padding: '0 24px 20px',
+                        color: '#475569',
+                        fontSize: '0.95rem',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         {/* About */}
         {data.aboutText && (
@@ -708,7 +931,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p
               style={{
                 whiteSpace: 'pre-wrap',
-                color: '#334155', // Slate-700
+                color: '#334155',
                 lineHeight: 1.8,
                 fontSize: '1.05rem',
                 maxWidth: 740,
@@ -723,7 +946,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
         <section
           id="contact"
           style={{
-            background: '#ffffff', // Clean white background for contact card
+            background: '#ffffff',
             border: '1px solid rgba(0, 0, 0, 0.05)',
             borderRadius: 20,
             padding: '36px 40px',
@@ -755,8 +978,11 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               </p>
             )}
             {data.phone && (
-              <p style={{ margin: 0, color: '#475569', fontSize: '1rem' }}>
-                📞{' '}
+              <p style={{ margin: 0, color: '#475569', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={secondary} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                  <line x1="12" y1="18" x2="12.01" y2="18" strokeWidth="3" />
+                </svg>
                 <a
                   href={`tel:${data.phone}`}
                   style={{ color: secondary, fontWeight: 600, textDecoration: 'none' }}
@@ -766,6 +992,45 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               </p>
             )}
           </div>
+
+          {/* Google Maps Directions Button */}
+          {(() => {
+            const mapsUrl = data.googleMapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.businessName + ' ' + data.sector + ' Sri Lanka')}`;
+            return (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginTop: 18,
+                  padding: '10px 22px',
+                  borderRadius: 12,
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  textDecoration: 'none',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#e2e8f0';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9';
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#EA4335" style={{ flexShrink: 0 }}>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span>Get Directions on Google Maps</span>
+              </a>
+            );
+          })()}
+
           {data.socialLinks && data.socialLinks.length > 0 && (
             <div
               style={{
@@ -787,7 +1052,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                     gap: 8,
                     padding: '10px 20px',
                     borderRadius: 999,
-                    background: primary + '0c', // Soft tinted background
+                    background: primary + '0c',
                     color: primary,
                     fontWeight: 700,
                     fontSize: '0.9rem',
@@ -866,7 +1131,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
         </button>
       )}
 
-      {/* Sliding Cart Drawer (Light Mode) */}
+      {/* Sliding Cart Drawer */}
       <div
         style={{
           position: 'fixed',
@@ -875,7 +1140,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
           bottom: 0,
           width: '100%',
           maxWidth: 420,
-          background: 'rgba(255, 255, 255, 0.98)', // Clean white glass
+          background: 'rgba(255, 255, 255, 0.98)',
           backdropFilter: 'blur(30px)',
           borderLeft: '1px solid rgba(0, 0, 0, 0.08)',
           zIndex: 100,
@@ -1163,6 +1428,59 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               </span>
             </div>
 
+            {/* Supported Payment Badges */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  color: '#64748b',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  width: '100%',
+                  textAlign: 'center',
+                  marginBottom: 4,
+                }}
+              >
+                Accepted Payments
+              </span>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#1e293b',
+                  background: 'rgba(0,0,0,0.04)',
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(0,0,0,0.06)',
+                }}
+              >
+                💵 Cash on Delivery
+              </span>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#1e293b',
+                  background: 'rgba(0,0,0,0.04)',
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(0,0,0,0.06)',
+                }}
+              >
+                🏦 Bank Transfer
+              </span>
+            </div>
+
             <button
               onClick={handleCheckout}
               style={{
@@ -1197,7 +1515,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                 style={{
                   margin: '8px 0 0',
                   fontSize: '0.75rem',
-                  color: '#b45309', // Amber-700
+                  color: '#b45309',
                   textAlign: 'center',
                   lineHeight: 1.4,
                 }}
