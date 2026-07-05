@@ -18,6 +18,9 @@ interface SocialLink {
 interface BusinessData {
   businessName: string;
   sector: string;
+  websiteSlug?: string;
+  businessDescription?: string;
+  targetMarket?: string;
   heroText?: string;
   aboutText?: string;
   marketingText?: string;
@@ -73,25 +76,18 @@ export default async function BusinessPage({ params }: { params: { slug: string 
 
   if (!data) {
     return (
-      <main
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
-          background: '#000',
-          color: '#fff',
-          padding: 48,
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ fontSize: 56, marginBottom: 24 }}>🌴</div>
-        <h1 style={{ fontWeight: 900, color: '#fff', marginBottom: 12 }}>Business not found</h1>
-        <p style={{ color: '#94a3b8', maxWidth: 420 }}>
-          The business you're looking for doesn't exist or may not have published their site yet.
-        </p>
+      <main className="site-shell not-found-shell">
+        <div className="not-found-card">
+          <span className="not-found-mark">BLK</span>
+          <p className="section-kicker">Business not found</p>
+          <h1>That website is not live yet.</h1>
+          <p>
+            The business you&apos;re looking for does not exist, or the owner has not published their site yet.
+          </p>
+          <a className="button button-primary" href="/">
+            Return home
+          </a>
+        </div>
       </main>
     );
   }

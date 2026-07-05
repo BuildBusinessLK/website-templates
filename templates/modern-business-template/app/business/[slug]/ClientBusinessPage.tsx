@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export interface Product {
   id?: number;
@@ -39,17 +39,22 @@ export interface BusinessData {
   googleMapsUrl?: string;
 }
 
-interface CartItem {
-  product: Product;
-  quantity: number;
-}
-
-const DEFAULT_PRIMARY = '#0f766e';
-const DEFAULT_SECONDARY = '#f59e0b';
+const DEFAULT_PRIMARY = '#22c55e';
+const DEFAULT_SECONDARY = '#ff6b35';
 const COPYRIGHT_YEAR = 2026;
+const HOME_HERO_IMAGE = '/brand-home-bg.png';
+
+const PHOTO_THEMES = [
+  { keys: ['coconut', 'palmyra', 'kithul', 'food', 'tea', 'spice', 'bakery', 'restaurant'], query: 'sri+lanka+food+market' },
+  { keys: ['craft', 'handmade', 'textile', 'batik', 'fashion', 'jewelry', 'wood'], query: 'handmade+artisan+workshop' },
+  { keys: ['beauty', 'salon', 'wellness', 'spa'], query: 'modern+salon+wellness' },
+  { keys: ['agriculture', 'farm', 'organic', 'plant'], query: 'organic+farm+produce' },
+  { keys: ['technology', 'digital', 'software', 'service', 'consulting'], query: 'modern+small+business+team' },
+  { keys: ['tourism', 'travel', 'hotel', 'guest', 'villa'], query: 'sri+lanka+boutique+hotel' },
+] as const;
 
 function cleanSector(sector?: string) {
-  return (sector || 'Local business').replace(/_/g, ' ').toLowerCase();
+  return (sector || 'Local business').replace(/_/g, ' ').trim().toLowerCase();
 }
 
 function titleCase(value: string) {
@@ -58,6 +63,25 @@ function titleCase(value: string) {
 
 function getProductKey(product: Product) {
   return product.id?.toString() ?? product.name;
+}
+
+function getInitials(name?: string) {
+  return (name || 'Business')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+}
+
+function getImageQuery(sector?: string) {
+  const normalized = cleanSector(sector);
+  const match = PHOTO_THEMES.find((theme) => theme.keys.some((key) => normalized.includes(key)));
+  return match?.query || 'sri+lanka+small+business+market';
+}
+
+function getFallbackPhoto(query: string, width = 1200, height = 900) {
+  return `https://source.unsplash.com/${width}x${height}/?${query}`;
 }
 
 function formatPhoneNumber(phone: string) {
@@ -70,7 +94,7 @@ function formatPhoneNumber(phone: string) {
 
 function getOpenStatus(openTime?: string, closeTime?: string, workingDays?: string) {
   if (!openTime || !closeTime) {
-    return { isOpen: true, text: 'Contact us anytime' };
+    return { isOpen: true, text: 'Available for inquiries' };
   }
 
   const now = new Date();
@@ -105,7 +129,7 @@ function getOpenStatus(openTime?: string, closeTime?: string, workingDays?: stri
 
 function getInitialOpenStatus(openTime?: string, closeTime?: string) {
   if (!openTime || !closeTime) {
-    return { isOpen: true, text: 'Contact us anytime' };
+    return { isOpen: true, text: 'Available for inquiries' };
   }
   return { isOpen: true, text: `${openTime} - ${closeTime}` };
 }
@@ -125,118 +149,51 @@ function getSocialIcon(platform: string) {
   if (normalized.includes('instagram')) return 'ig';
   if (normalized.includes('whatsapp')) return 'wa';
   if (normalized.includes('tiktok')) return 'tk';
-  return 'ln';
-}
-
-function getInitials(name?: string) {
-  return (name || 'Business')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
+  return 'in';
 }
 
 export default function ClientBusinessPage({ data }: { data: BusinessData }) {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-
   const products = data.products || [];
   const hasProducts = products.length > 0;
   const primary = data.primaryColor || DEFAULT_PRIMARY;
   const secondary = data.secondaryColor || DEFAULT_SECONDARY;
   const sector = titleCase(cleanSector(data.sector));
+  const photoQuery = useMemo(() => getImageQuery(data.sector), [data.sector]);
+  const showcaseImage = data.coverImageUrl || getFallbackPhoto(photoQuery);
   const [status, setStatus] = useState(() => getInitialOpenStatus(data.businessHoursOpen, data.businessHoursClose));
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const cartTotal = cart.reduce((sum, item) => sum + (item.product.price || 0) * item.quantity, 0);
   const mapsUrl =
     data.googleMapsUrl ||
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${data.businessName} ${sector} Sri Lanka`)}`;
   const heroText =
     data.heroText ||
     data.businessDescription ||
-    `Discover ${data.businessName}, a Sri Lankan ${cleanSector(data.sector)} bringing dependable products and friendly service to customers.`;
+    `Meet ${data.businessName}, a Sri Lankan ${cleanSector(data.sector)} built around quality, trust, and friendly local service.`;
   const aboutText =
     data.aboutText ||
     data.businessDescription ||
-    `${data.businessName} is building a trusted local brand with practical service, clear communication, and a growing presence online.`;
+    `${data.businessName} is a growing SME brand with a simple promise: make it easy for customers to understand what we offer, why it matters, and how to reach us.`;
   const marketingText =
     data.marketingText ||
-    'Message us to ask questions, place an order, or learn what is available today.';
+    'Message us to learn more, ask about availability, or discuss what you need.';
+  const marketText = data.targetMarket || 'Local customers and repeat buyers';
 
   useEffect(() => {
     setStatus(getOpenStatus(data.businessHoursOpen, data.businessHoursClose, data.workingDays));
   }, [data.businessHoursClose, data.businessHoursOpen, data.workingDays]);
 
-  const addToCart = (product: Product) => {
-    setCart((prev) => {
-      const key = getProductKey(product);
-      const existing = prev.find((item) => getProductKey(item.product) === key);
-      if (existing) {
-        return prev.map((item) =>
-          getProductKey(item.product) === key ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [...prev, { product, quantity: 1 }];
-    });
-  };
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setStatus(getOpenStatus(data.businessHoursOpen, data.businessHoursClose, data.workingDays));
+    }, 60000);
 
-  const updateQuantity = (product: Product, delta: number) => {
-    const key = getProductKey(product);
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          getProductKey(item.product) === key
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
-    );
-  };
-
-  const removeFromCart = (product: Product) => {
-    const key = getProductKey(product);
-    setCart((prev) => prev.filter((item) => getProductKey(item.product) !== key));
-  };
+    return () => window.clearInterval(interval);
+  }, [data.businessHoursClose, data.businessHoursOpen, data.workingDays]);
 
   const contactHref = data.phone
-    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(`Hello ${data.businessName}, I found your website and would like to ask about your products or services.`)}`
+    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(`Hello ${data.businessName}, I found your website and would like to learn more about your brand.`)}`
     : data.contactEmail
       ? `mailto:${data.contactEmail}?subject=${encodeURIComponent(`Inquiry for ${data.businessName}`)}`
       : '#contact';
-
-  const handleDirectBuy = (product: Product) => {
-    const priceText = product.price != null ? ` (LKR ${product.price.toLocaleString()})` : '';
-    const message = `Hello ${data.businessName}, I would like to buy ${product.name}${priceText}. Please let me know how to proceed.`;
-    if (data.phone) {
-      window.open(`https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(message)}`, '_blank');
-      return;
-    }
-    if (data.contactEmail) {
-      window.open(
-        `mailto:${data.contactEmail}?subject=${encodeURIComponent(`Order: ${product.name}`)}&body=${encodeURIComponent(message)}`,
-        '_blank'
-      );
-    }
-  };
-
-  const handleCheckout = () => {
-    const lines = cart.map((item, index) => {
-      const price = item.product.price != null ? ` (LKR ${item.product.price.toLocaleString()} each)` : '';
-      return `${index + 1}. ${item.product.name} x${item.quantity}${price}`;
-    });
-    const message = `Hello ${data.businessName}, I would like to place this order:\n\n${lines.join('\n')}\n\nTotal: LKR ${cartTotal.toLocaleString()}\n\nPlease confirm availability.`;
-    if (data.phone) {
-      window.open(`https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(message)}`, '_blank');
-      return;
-    }
-    if (data.contactEmail) {
-      window.open(
-        `mailto:${data.contactEmail}?subject=${encodeURIComponent(`Order for ${data.businessName}`)}&body=${encodeURIComponent(message)}`,
-        '_blank'
-      );
-    }
-  };
 
   const shellStyle = {
     '--primary': primary,
@@ -244,9 +201,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
   } as CSSProperties;
 
   const heroStyle = {
-    background: data.coverImageUrl
-      ? `linear-gradient(110deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.9) 47%, rgba(255,255,255,0.1) 100%), url("${data.coverImageUrl}")`
-      : undefined,
+    backgroundImage: `linear-gradient(90deg, rgba(6, 10, 13, 0.9) 0%, rgba(6, 10, 13, 0.72) 44%, rgba(6, 10, 13, 0.26) 100%), url("${HOME_HERO_IMAGE}")`,
   };
 
   return (
@@ -264,21 +219,16 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
           </a>
 
           <div className="nav-links">
-            <a href="#about">About</a>
-            {hasProducts && <a href="#products">Products</a>}
+            <a href="#story">Story</a>
+            {hasProducts && <a href="#showcase">Showcase</a>}
             <a href="#contact">Contact</a>
-            {hasProducts && (
-              <button className="nav-cart" type="button" onClick={() => setIsCartOpen(true)}>
-                Cart <span className="cart-count">{cartCount}</span>
-              </button>
-            )}
           </div>
         </div>
       </nav>
 
       <header id="home" className="hero" style={heroStyle}>
         <div className="container hero-grid">
-          <div>
+          <div className="hero-copy-block reveal-up">
             <p className="eyebrow">
               <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
               {status.text}
@@ -287,123 +237,96 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p className="hero-copy">{heroText}</p>
             <div className="hero-actions">
               <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
-                Contact business
+                Contact the brand
               </a>
               {hasProducts && (
-                <a className="button button-secondary" href="#products">
-                  View products
+                <a className="button button-secondary" href="#showcase">
+                  View showcase
                 </a>
               )}
             </div>
           </div>
 
-          <aside className="hero-card" aria-label="Business summary">
-            <div className="hero-card-media">
-              {data.coverImageUrl ? (
-                <img src={data.coverImageUrl} alt={`${data.businessName} cover`} />
-              ) : (
-                <div className="hero-card-media-fallback">{getInitials(data.businessName)}</div>
-              )}
-            </div>
-            <div className="hero-card-body">
-              <div className="quick-facts">
-                <div className="fact">
-                  <span className="fact-icon">1</span>
-                  <div>
-                    <strong>{sector}</strong>
-                    <span>Sri Lankan SME profile</span>
-                  </div>
-                </div>
-                <div className="fact">
-                  <span className="fact-icon">2</span>
-                  <div>
-                    <strong>{hasProducts ? `${products.length} product${products.length === 1 ? '' : 's'}` : 'Ready for inquiries'}</strong>
-                    <span>{hasProducts ? 'Browse current offers below' : 'Ask about availability, services, and pricing'}</span>
-                  </div>
-                </div>
-                <div className="fact">
-                  <span className="fact-icon">3</span>
-                  <div>
-                    <strong>{data.workingDays || 'Flexible contact'}</strong>
-                    <span>{data.businessHoursOpen && data.businessHoursClose ? `${data.businessHoursOpen} - ${data.businessHoursClose}` : 'Message to confirm hours'}</span>
-                  </div>
-                </div>
-              </div>
+          <aside className="hero-panel reveal-up delay-1" aria-label="Brand summary">
+            <img src={showcaseImage} alt={`${data.businessName} brand visual`} />
+            <div className="hero-panel-body">
+              <span>{sector}</span>
+              <h2>{marketText}</h2>
+              <p>{marketingText}</p>
             </div>
           </aside>
         </div>
       </header>
 
-      <section id="about" className="section">
+      <section id="story" className="section story-section">
         <div className="container story-grid">
-          <div>
-            <p className="section-kicker">About the business</p>
-            <h2>Built for customers who want clear, local service.</h2>
-            <div className="story-card" style={{ marginTop: 24 }}>
-              <p>{aboutText}</p>
-            </div>
+          <div className="story-copy reveal-up">
+            <p className="section-kicker">Brand story</p>
+            <h2>A simple marketing page made for a growing SME.</h2>
+            <p>{aboutText}</p>
           </div>
-          <aside className="highlight-list">
-            <div className="highlight">
-              <b>Easy to reach</b>
-              <span>{data.phone || data.contactEmail ? 'Contact details are available below.' : 'Contact details can be added by the owner anytime.'}</span>
-            </div>
-            <div className="highlight">
-              <b>Expandable site</b>
-              <span>Products, social links, hours, and location appear automatically as the owner adds them.</span>
-            </div>
-            <div className="highlight">
-              <b>Why choose us</b>
-              <span>{marketingText}</span>
-            </div>
-          </aside>
+          <div className="story-notes reveal-up delay-1">
+            <article>
+              <span>01</span>
+              <h3>Tell the story</h3>
+              <p>Customers can quickly understand the brand, the offer, and the reason to trust it.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Show useful details</h3>
+              <p>Products, services, photos, opening hours, and social links can appear when the owner adds them.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Move to contact</h3>
+              <p>The page stays focused on calls, messages, directions, and social engagement instead of online selling.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="section theme-band">
+        <div className="container band-grid">
+          <div className="band-copy reveal-up">
+            <p className="section-kicker">Fast launch</p>
+            <h2>Created in seconds, useful from day one.</h2>
+          </div>
+          <p className="band-lede reveal-up delay-1">
+            This template works even with a small business profile. As the owner adds more brand copy, photos, products, or services, the page becomes richer without needing a custom build.
+          </p>
         </div>
       </section>
 
       {hasProducts && (
-        <section id="products" className="section section-alt">
+        <section id="showcase" className="section showcase-section">
           <div className="container">
-            <div className="section-heading">
+            <div className="section-heading reveal-up">
               <div>
-                <p className="section-kicker">Products</p>
-                <h2>Current products and offers</h2>
-                <p className="section-lede">Add items to cart or ask about a single product. Orders are sent directly to the business owner.</p>
+                <p className="section-kicker">Product showcase</p>
+                <h2>What {data.businessName} wants customers to notice.</h2>
+                <p className="section-lede">Products and services are presented as marketing details, not a sales flow.</p>
               </div>
+              <div className="section-summary-pill">{products.length} detail{products.length === 1 ? '' : 's'} shared</div>
             </div>
 
             <div className="product-grid">
-              {products.map((product) => {
-                const key = getProductKey(product);
-                const cartItem = cart.find((item) => getProductKey(item.product) === key);
+              {products.map((product, index) => {
+                const imageUrl = product.imageUrl || getFallbackPhoto(`${encodeURIComponent(product.name)}+${photoQuery}`, 900, 700);
                 return (
-                  <article className="product-card" key={key}>
+                  <article className="product-card reveal-up" style={{ animationDelay: `${index * 80}ms` }} key={getProductKey(product)}>
                     <div className="product-media">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} />
-                      ) : (
-                        getInitials(product.name)
-                      )}
+                      <img src={imageUrl} alt={product.name} />
                     </div>
                     <div className="product-body">
+                      <span className="product-badge">Showcase</span>
                       <h3 className="product-title">{product.name}</h3>
                       {product.description && <p className="product-description">{product.description}</p>}
                       <div className="product-footer">
-                        <p className="price">{product.price != null ? `LKR ${product.price.toLocaleString()}` : 'Ask for price'}</p>
-                        {cartItem ? (
-                          <span className="quantity">
-                            <button type="button" onClick={() => updateQuantity(product, -1)} aria-label={`Remove one ${product.name}`}>-</button>
-                            <span>{cartItem.quantity}</span>
-                            <button type="button" onClick={() => updateQuantity(product, 1)} aria-label={`Add one ${product.name}`}>+</button>
-                          </span>
-                        ) : (
-                          <button className="tiny-button" type="button" onClick={() => addToCart(product)}>
-                            Add to cart
-                          </button>
-                        )}
+                        <p className="price">{product.price != null ? `From LKR ${product.price.toLocaleString()}` : 'Contact for details'}</p>
+                        <a className="text-link" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+                          Ask more
+                        </a>
                       </div>
-                      <button className="tiny-button" type="button" onClick={() => handleDirectBuy(product)} style={{ background: secondary }}>
-                        Ask about this
-                      </button>
                     </div>
                   </article>
                 );
@@ -413,29 +336,45 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
         </section>
       )}
 
-      <section id="contact" className="section">
+      {!hasProducts && (
+        <section className="section showcase-section">
+          <div className="container preview-grid">
+            {['Brand promise', 'Product details', 'Service highlights'].map((label, index) => (
+              <article className="preview-card reveal-up" style={{ animationDelay: `${index * 80}ms` }} key={label}>
+                <img src={index === 0 ? showcaseImage : getFallbackPhoto(`${photoQuery}+brand`, 700, 560)} alt={`${sector} ${label}`} />
+                <div>
+                  <span>{label}</span>
+                  <p>The owner can add products, photos, or service details later and this area will become a real showcase.</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section id="contact" className="section contact-section">
         <div className="container contact-grid">
-          <div className="contact-panel">
+          <div className="contact-panel reveal-up">
             <p className="section-kicker">Contact</p>
             <h2>Start a conversation with {data.businessName}.</h2>
             <p className="section-lede">{marketingText}</p>
 
-            <div style={{ marginTop: 22 }}>
+            <div className="contact-links">
               {data.phone && (
                 <a className="contact-link" href={`tel:${data.phone}`}>
                   <span>Phone</span>
-                  <span>{data.phone}</span>
+                  <strong>{data.phone}</strong>
                 </a>
               )}
               {data.contactEmail && (
                 <a className="contact-link" href={`mailto:${data.contactEmail}`}>
                   <span>Email</span>
-                  <span>{data.contactEmail}</span>
+                  <strong>{data.contactEmail}</strong>
                 </a>
               )}
               <a className="contact-link" href={mapsUrl} target="_blank" rel="noreferrer">
                 <span>Location</span>
-                <span>Open directions</span>
+                <strong>Open directions</strong>
               </a>
             </div>
 
@@ -451,81 +390,23 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             )}
           </div>
 
-          <aside className="map-panel">
-            <p className="section-kicker">Visit or inquire</p>
-            <h3 style={{ margin: '0 0 12px', fontSize: '1.5rem' }}>{data.workingDays || 'Contact for availability'}</h3>
-            <p style={{ margin: '0 0 18px', color: '#475569', lineHeight: 1.6 }}>
-              {data.businessHoursOpen && data.businessHoursClose
-                ? `${data.businessHoursOpen} - ${data.businessHoursClose}`
-                : 'The owner can add opening hours later. For now, use the contact options to confirm availability.'}
-            </p>
-            <a className="button button-primary" href={mapsUrl} target="_blank" rel="noreferrer">
-              Get directions
-            </a>
+          <aside className="hours-panel reveal-up delay-1">
+            <img src={showcaseImage} alt={`${data.businessName} visual`} />
+            <div className="hours-body">
+              <span>Availability</span>
+              <h3>{data.workingDays || 'Contact for availability'}</h3>
+              <p>
+                {data.businessHoursOpen && data.businessHoursClose
+                  ? `${data.businessHoursOpen} - ${data.businessHoursClose}`
+                  : 'Use the contact options to confirm availability and ask for the latest details.'}
+              </p>
+              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+                Message now
+              </a>
+            </div>
           </aside>
         </div>
       </section>
-
-      {isCartOpen && (
-        <>
-          <div className="drawer-backdrop" onClick={() => setIsCartOpen(false)} />
-          <aside className="drawer" aria-label="Shopping cart">
-            <div className="drawer-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <strong>Your cart</strong>
-              <button className="tiny-button" type="button" onClick={() => setIsCartOpen(false)} style={{ background: '#e2e8f0', color: '#172033' }}>
-                Close
-              </button>
-            </div>
-            <div className="drawer-body">
-              {cart.length === 0 ? (
-                <p style={{ color: '#64748b', margin: 0 }}>Your cart is empty.</p>
-              ) : (
-                cart.map((item) => (
-                  <div className="cart-item" key={getProductKey(item.product)}>
-                    {item.product.imageUrl ? (
-                      <img className="cart-thumb" src={item.product.imageUrl} alt={item.product.name} />
-                    ) : (
-                      <div className="cart-thumb">{getInitials(item.product.name)}</div>
-                    )}
-                    <div>
-                      <strong>{item.product.name}</strong>
-                      <p style={{ margin: '4px 0 10px', color: '#64748b', fontSize: '0.88rem' }}>
-                        {item.product.price != null ? `LKR ${item.product.price.toLocaleString()}` : 'Ask for price'}
-                      </p>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                        <span className="quantity">
-                          <button type="button" onClick={() => updateQuantity(item.product, -1)}>-</button>
-                          <span>{item.quantity}</span>
-                          <button type="button" onClick={() => updateQuantity(item.product, 1)}>+</button>
-                        </span>
-                        <button type="button" onClick={() => removeFromCart(item.product)} style={{ border: 0, background: 'transparent', color: '#dc2626', fontWeight: 800, cursor: 'pointer' }}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            {cart.length > 0 && (
-              <div className="drawer-footer">
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, fontWeight: 950 }}>
-                  <span>Estimated total</span>
-                  <span>LKR {cartTotal.toLocaleString()}</span>
-                </div>
-                <button className="button button-primary" type="button" onClick={handleCheckout} style={{ width: '100%' }}>
-                  Send order inquiry
-                </button>
-                {!data.phone && !data.contactEmail && (
-                  <p style={{ margin: '12px 0 0', color: '#b45309', fontSize: '0.82rem', lineHeight: 1.5 }}>
-                    The owner has not added phone or email details yet.
-                  </p>
-                )}
-              </div>
-            )}
-          </aside>
-        </>
-      )}
 
       <footer>
         <div className="container">
