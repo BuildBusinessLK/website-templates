@@ -78,15 +78,13 @@ export default async function BusinessPage({ params }: { params: { slug: string 
     return (
       <main className="site-shell not-found-shell">
         <div className="not-found-card">
-          <span className="not-found-mark">BLK</span>
-          <p className="section-kicker">Business not found</p>
-          <h1>That website is not live yet.</h1>
+          <span className="not-found-mark">BB</span>
+          <p className="section-kicker">Site not found</p>
+          <h1>This business page is not live yet.</h1>
           <p>
-            The business you&apos;re looking for does not exist, or the owner has not published their site yet.
+            The link may be wrong, or the owner has not published their marketing site yet. Check the URL or ask the
+            business owner to publish from their dashboard.
           </p>
-          <a className="button button-primary" href="/">
-            Return home
-          </a>
         </div>
       </main>
     );

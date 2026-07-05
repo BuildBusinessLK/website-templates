@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface Product {
   id?: number;
@@ -42,11 +42,6 @@ export interface BusinessData {
 const DEFAULT_PRIMARY = '#1f8a4c';
 const DEFAULT_SECONDARY = '#e0632f';
 
-// ---------- sector -> motif ----------
-// Instead of pulling stock photos from a third-party image service (which breaks
-// the moment the business has no real photo, and never actually fits the brand),
-// every sector maps to a small generated pattern built from the business's own colors.
-// It never fails to load and it never looks like a random stock photo.
 type MotifId = 'harvest' | 'weave' | 'bloom' | 'grove' | 'grid' | 'tide';
 
 const SECTOR_MOTIFS: { keys: string[]; motif: MotifId }[] = [
@@ -196,7 +191,34 @@ function getSocialLabel(platform: string) {
   return platform || 'Link';
 }
 
-type IconName = 'facebook' | 'instagram' | 'whatsapp' | 'tiktok' | 'link' | 'phone' | 'mail' | 'pin' | 'menu' | 'close' | 'arrow';
+function hasText(value?: string | null) {
+  return Boolean(value && value.trim());
+}
+
+function pickText(...values: (string | undefined | null)[]) {
+  for (const value of values) {
+    if (hasText(value)) return value!.trim();
+  }
+  return '';
+}
+
+type IconName =
+  | 'facebook'
+  | 'instagram'
+  | 'whatsapp'
+  | 'tiktok'
+  | 'link'
+  | 'phone'
+  | 'mail'
+  | 'pin'
+  | 'menu'
+  | 'close'
+  | 'arrow'
+  | 'clock'
+  | 'star'
+  | 'shield'
+  | 'spark'
+  | 'chevron-up';
 
 function Icon({ name }: { name: IconName }) {
   const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', xmlns: 'http://www.w3.org/2000/svg' };
@@ -266,6 +288,38 @@ function Icon({ name }: { name: IconName }) {
           <circle cx="12" cy="9.7" r="2.2" />
         </svg>
       );
+    case 'clock':
+      return (
+        <svg {...common} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      );
+    case 'star':
+      return (
+        <svg {...common} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+          <path d="m12 4.5 2.1 4.3 4.7.7-3.4 3.3.8 4.7L12 15.8l-4.2 2.2.8-4.7-3.4-3.3 4.7-.7L12 4.5Z" />
+        </svg>
+      );
+    case 'shield':
+      return (
+        <svg {...common} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+          <path d="M12 3.5 5 6.5v5.8c0 4.2 3 7.9 7 8.7 4-.8 7-4.5 7-8.7V6.5l-7-3Z" />
+          <path d="m9.5 12 1.8 1.8L15.5 9.5" />
+        </svg>
+      );
+    case 'spark':
+      return (
+        <svg {...common} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
+        </svg>
+      );
+    case 'chevron-up':
+      return (
+        <svg {...common} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M6 14l6-6 6 6" />
+        </svg>
+      );
     case 'menu':
       return (
         <svg {...common} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -297,44 +351,123 @@ function getSocialIconName(platform: string): IconName {
   return 'link';
 }
 
-/** A generated brand plate used anywhere a photo would normally go, and as a graceful
- *  fallback the moment a real photo fails to load or was never provided. */
+function useReveal() {
+  const ref = useRef<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: '0px 0px -40px 0px' },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, visible };
+}
+
+function RevealSection({
+  children,
+  className = '',
+  id,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  id?: string;
+}) {
+  const { ref, visible } = useReveal();
+  return (
+    <section ref={ref} id={id} className={`${className}${visible ? ' is-visible' : ''}`}>
+      {children}
+    </section>
+  );
+}
+
 function MotifPlate({
   motif,
   label,
   sublabel,
   compact,
+  animated,
 }: {
   motif: MotifId;
   label: string;
   sublabel?: string;
   compact?: boolean;
+  animated?: boolean;
 }) {
   return (
-    <div className={`motif-plate${compact ? ' motif-plate--compact' : ''}`} style={motifBackground(motif)}>
+    <div
+      className={`motif-plate${compact ? ' motif-plate--compact' : ''}${animated ? ' motif-plate--animated' : ''}`}
+      style={motifBackground(motif)}
+      role="img"
+      aria-label={sublabel ? `${label} — ${sublabel}` : label}
+    >
       <span className="motif-plate-mark">{label}</span>
       {sublabel && <span className="motif-plate-sub">{sublabel}</span>}
     </div>
   );
 }
 
-/** Image with an automatic fallback to the motif plate if it fails to load or is absent. */
 function SmartImage({
   src,
   alt,
   motif,
   label,
+  compact,
+  className = '',
 }: {
   src?: string;
   alt: string;
   motif: MotifId;
   label: string;
+  compact?: boolean;
+  className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return <MotifPlate motif={motif} label={label} />;
+  const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const trimmedSrc = src?.trim();
+
+  useEffect(() => {
+    setState(trimmedSrc ? 'loading' : 'failed');
+  }, [trimmedSrc]);
+
+  if (!trimmedSrc || state === 'failed') {
+    return <MotifPlate motif={motif} label={label} compact={compact} animated={!compact} />;
   }
-  return <img src={src} alt={alt} onError={() => setFailed(true)} />;
+
+  return (
+    <div className={`smart-image${className ? ` ${className}` : ''}`}>
+      {state === 'loading' && <div className="smart-image-skeleton" aria-hidden="true" />}
+      <img
+        src={trimmedSrc}
+        alt={alt}
+        className={state === 'loaded' ? 'is-loaded' : 'is-loading'}
+        onLoad={() => setState('loaded')}
+        onError={() => setState('failed')}
+      />
+    </div>
+  );
+}
+
+function HeroBackdrop({ motif }: { motif: MotifId }) {
+  return (
+    <div className="hero-backdrop" aria-hidden="true">
+      <div className="hero-orb hero-orb--primary" />
+      <div className="hero-orb hero-orb--secondary" />
+      <div className="hero-orb hero-orb--accent" />
+      <div className={`hero-motif hero-motif--${motif}`} />
+    </div>
+  );
 }
 
 export default function ClientBusinessPage({ data }: { data: BusinessData }) {
@@ -347,20 +480,37 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
   const initials = getInitials(data.businessName);
   const [status, setStatus] = useState(() => getInitialOpenStatus(data.businessHoursOpen, data.businessHoursClose));
   const [navOpen, setNavOpen] = useState(false);
+  const [showTop, setShowTop] = useState(false);
 
   const mapsUrl =
     data.googleMapsUrl ||
     `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${data.businessName} ${sector} Sri Lanka`)}`;
-  const heroText =
-    data.heroText ||
-    data.businessDescription ||
-    `Meet ${data.businessName}, a Sri Lankan ${cleanSector(data.sector)} built around quality, trust, and friendly local service.`;
-  const aboutText =
-    data.aboutText ||
-    data.businessDescription ||
-    `${data.businessName} is a growing SME brand focused on one thing: making it easy for customers to see what's on offer, why it's worth trying, and how to get in touch.`;
-  const marketingText = data.marketingText || 'Message us to check availability or ask a question — we reply fast.';
-  const marketText = data.targetMarket || 'Local customers and repeat buyers';
+
+  const heroText = pickText(
+    data.heroText,
+    data.businessDescription,
+    `Welcome to ${data.businessName} — a trusted ${cleanSector(data.sector)} brand serving customers across Sri Lanka.`,
+  );
+
+  const aboutText = pickText(
+    data.aboutText,
+    data.businessDescription,
+    `${data.businessName} is a growing local brand focused on quality, friendly service, and making it easy for customers to discover what we offer and get in touch.`,
+  );
+
+  const marketingText = pickText(
+    data.marketingText,
+    'Reach out to check availability, ask a question, or place an inquiry — we respond quickly.',
+  );
+
+  const marketText = pickText(data.targetMarket, `Serving ${sector.toLowerCase()} customers near you`);
+
+  const hoursLabel =
+    data.businessHoursOpen && data.businessHoursClose
+      ? `${data.businessHoursOpen} – ${data.businessHoursClose}`
+      : 'Message us to confirm hours';
+
+  const workingDaysLabel = pickText(data.workingDays, 'Contact for availability');
 
   useEffect(() => {
     setStatus(getOpenStatus(data.businessHoursOpen, data.businessHoursClose, data.workingDays));
@@ -377,12 +527,21 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     setNavOpen(false);
   }, [data.businessName]);
 
+  useEffect(() => {
+    const onScroll = () => setShowTop(window.scrollY > 480);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   const contactHref = data.phone
-    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(`Hello ${data.businessName}, I found your website and would like to learn more about your brand.`)}`
+    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(`Hello ${data.businessName}, I found your website and would like to learn more.`)}`
     : data.contactEmail
       ? `mailto:${data.contactEmail}?subject=${encodeURIComponent(`Inquiry for ${data.businessName}`)}`
       : '#contact';
+
   const hasDirectContact = Boolean(data.phone || data.contactEmail);
+  const hasSocial = Boolean(data.socialLinks && data.socialLinks.length > 0);
 
   const shellStyle = {
     '--primary': primary,
@@ -395,6 +554,51 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     { href: '#contact', label: 'Contact' },
   ];
 
+  const trustStats = [
+    { icon: 'spark' as IconName, label: 'Sector', value: sector },
+    {
+      icon: 'clock' as IconName,
+      label: 'Hours',
+      value: data.businessHoursOpen && data.businessHoursClose ? hoursLabel : 'Flexible',
+    },
+    {
+      icon: 'star' as IconName,
+      label: 'Showcase',
+      value: hasProducts ? `${products.length} item${products.length === 1 ? '' : 's'}` : 'Coming soon',
+    },
+    {
+      icon: 'shield' as IconName,
+      label: 'Status',
+      value: status.isOpen ? 'Open for inquiries' : 'Closed now',
+    },
+  ];
+
+  const highlights = [
+    {
+      icon: 'star' as IconName,
+      title: 'Local & trusted',
+      text: `${data.businessName} is built around quality service in the ${sector.toLowerCase()} space.`,
+    },
+    {
+      icon: 'shield' as IconName,
+      title: 'Easy to reach',
+      text: hasDirectContact
+        ? 'Call, message, or email — pick whichever works best for you.'
+        : 'Find us on the map and send a message when you are ready.',
+    },
+    {
+      icon: 'spark' as IconName,
+      title: hasProducts ? 'Browse the showcase' : 'More coming soon',
+      text: hasProducts
+        ? 'See highlighted products and services before you get in touch.'
+        : 'New products and photos can be added anytime as the business grows.',
+    },
+  ];
+
+  const scrollToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   return (
     <main className="site-shell" style={shellStyle}>
       <nav className={`nav${navOpen ? ' nav-open' : ''}`}>
@@ -402,7 +606,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
           <a className="brand" href="#home" aria-label={`${data.businessName} home`} onClick={() => setNavOpen(false)}>
             <span className="brand-mark">
               {data.logoUrl ? (
-                <SmartImage src={data.logoUrl} alt="" motif={motif} label={initials} />
+                <SmartImage src={data.logoUrl} alt="" motif={motif} label={initials} compact />
               ) : (
                 <MotifPlate motif={motif} label={initials} compact />
               )}
@@ -456,8 +660,9 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
       </nav>
 
       <header id="home" className="hero">
+        <HeroBackdrop motif={motif} />
         <div className="container hero-grid">
-          <div className="hero-copy-block">
+          <div className="hero-copy-block reveal-on-load">
             <p className="eyebrow">
               <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
               {status.text}
@@ -470,17 +675,26 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                 Contact the brand
                 <Icon name="arrow" />
               </a>
-              {hasProducts && (
+              {hasProducts ? (
                 <a className="button button-secondary" href="#showcase">
                   View showcase
+                </a>
+              ) : (
+                <a className="button button-secondary" href="#story">
+                  Our story
                 </a>
               )}
             </div>
           </div>
 
-          <aside className="hero-panel" aria-label="Brand summary">
+          <aside className="hero-panel reveal-on-load reveal-delay-1" aria-label="Brand summary">
             <div className="hero-panel-media">
-              <SmartImage src={data.coverImageUrl} alt={`${data.businessName} brand visual`} motif={motif} label={initials} />
+              <SmartImage
+                src={data.coverImageUrl}
+                alt={`${data.businessName} brand visual`}
+                motif={motif}
+                label={initials}
+              />
             </div>
             <div className="hero-panel-body">
               <span>{sector}</span>
@@ -491,67 +705,98 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
         </div>
       </header>
 
-      <section id="story" className="section story-section">
+      <div className="trust-bar">
+        <div className="container trust-bar-grid">
+          {trustStats.map((item) => (
+            <div className="trust-stat" key={item.label}>
+              <span className="trust-stat-icon">
+                <Icon name={item.icon} />
+              </span>
+              <span className="trust-stat-copy">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <RevealSection id="story" className="section story-section reveal-section">
         <div className="container story-grid">
           <div className="story-copy">
             <p className="section-kicker">Brand story</p>
-            <h2>A marketing page built for a growing SME.</h2>
+            <h2>The story behind {data.businessName}.</h2>
             <p>{aboutText}</p>
           </div>
           <div className="story-notes">
-            <article>
-              <h3>Tell the story</h3>
-              <p>Customers see the brand, the offer, and the reason to trust it — in seconds.</p>
-            </article>
-            <article>
-              <h3>Show what matters</h3>
-              <p>Products, photos, hours, and social links appear as soon as the owner adds them.</p>
-            </article>
-            <article>
-              <h3>Get to contact</h3>
-              <p>The page stays focused on calls, messages, and directions — not an online checkout.</p>
-            </article>
+            {highlights.map((item) => (
+              <article key={item.title}>
+                <span className="story-note-icon">
+                  <Icon name={item.icon} />
+                </span>
+                <h3>{item.title}</h3>
+                <p>{item.text}</p>
+              </article>
+            ))}
           </div>
         </div>
-      </section>
+      </RevealSection>
 
-      <section className="section theme-band">
-        <div className="container band-grid">
-          <div className="band-copy">
-            <p className="section-kicker">Fast launch</p>
-            <h2>Live in seconds. Useful from day one.</h2>
+      <RevealSection className="section cta-band reveal-section">
+        <div className="container cta-band-inner">
+          <div className="cta-band-copy">
+            <p className="section-kicker">Ready when you are</p>
+            <h2>Questions, orders, or directions — we make it simple.</h2>
+            <p>{marketingText}</p>
           </div>
-          <p className="band-lede">
-            This page works even with a bare-bones profile. Add brand copy, photos, products, or services whenever
-            you're ready — the page grows with the business, without a rebuild.
-          </p>
+          <div className="cta-band-actions">
+            <a className="button button-primary button-light" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+              {data.phone ? 'Message on WhatsApp' : data.contactEmail ? 'Send an email' : 'Go to contact'}
+              <Icon name="arrow" />
+            </a>
+            <a className="button button-ghost" href={mapsUrl} target="_blank" rel="noreferrer">
+              <Icon name="pin" />
+              Get directions
+            </a>
+          </div>
         </div>
-      </section>
+      </RevealSection>
 
       {hasProducts ? (
-        <section id="showcase" className="section showcase-section">
+        <RevealSection id="showcase" className="section showcase-section reveal-section">
           <div className="container">
             <div className="section-heading">
               <div>
                 <p className="section-kicker">Product showcase</p>
-                <h2>What {data.businessName} wants customers to notice.</h2>
-                <p className="section-lede">Products and services shown here are marketing highlights, not a checkout.</p>
+                <h2>What {data.businessName} wants you to notice.</h2>
+                <p className="section-lede">Highlighted products and services — contact us for availability and details.</p>
               </div>
-              <div className="section-summary-pill">{products.length} detail{products.length === 1 ? '' : 's'} shared</div>
+              <div className="section-summary-pill">
+                {products.length} item{products.length === 1 ? '' : 's'}
+              </div>
             </div>
 
             <div className="product-grid">
               {products.map((product) => (
                 <article className="product-card" key={getProductKey(product)}>
                   <div className="product-media">
-                    <SmartImage src={product.imageUrl} alt={product.name} motif={motif} label={getInitials(product.name)} />
+                    <SmartImage
+                      src={product.imageUrl}
+                      alt={product.name}
+                      motif={motif}
+                      label={getInitials(product.name)}
+                    />
                   </div>
                   <div className="product-body">
                     <span className="product-badge">Showcase</span>
                     <h3 className="product-title">{product.name}</h3>
-                    {product.description && <p className="product-description">{product.description}</p>}
+                    <p className="product-description">
+                      {pickText(product.description, 'Contact us for full details about this item.')}
+                    </p>
                     <div className="product-footer">
-                      <p className="price">{product.price != null ? `From LKR ${product.price.toLocaleString()}` : 'Contact for details'}</p>
+                      <p className="price">
+                        {product.price != null ? `From LKR ${product.price.toLocaleString()}` : 'Price on request'}
+                      </p>
                       <a className="text-link" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
                         Ask more <Icon name="arrow" />
                       </a>
@@ -561,37 +806,37 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               ))}
             </div>
           </div>
-        </section>
+        </RevealSection>
       ) : (
-        <section className="section showcase-section">
+        <RevealSection className="section showcase-section reveal-section">
           <div className="container">
             <div className="section-heading">
               <div>
                 <p className="section-kicker">Product showcase</p>
-                <h2>Nothing shared here yet.</h2>
+                <h2>Our range is growing.</h2>
                 <p className="section-lede">
-                  Add products or services to fill this space with photos, pricing, and details customers can act on.
+                  Products and services will appear here once added — until then, reach out and we will share what is available.
                 </p>
               </div>
             </div>
             <div className="preview-grid">
-              {['Brand promise', 'Product details', 'Service highlights'].map((label) => (
-                <article className="preview-card" key={label}>
+              {['Featured item', 'Seasonal offer', 'Customer favourite'].map((label) => (
+                <article className="preview-card preview-card--empty" key={label}>
                   <div className="preview-media">
-                    <MotifPlate motif={motif} label={initials} sublabel={label} />
+                    <MotifPlate motif={motif} label={initials} sublabel={label} animated />
                   </div>
                   <div>
                     <span>{label}</span>
-                    <p>This card becomes real once the owner adds a product, service, or photo.</p>
+                    <p>Photo and details coming soon — message us to learn what is in stock today.</p>
                   </div>
                 </article>
               ))}
             </div>
           </div>
-        </section>
+        </RevealSection>
       )}
 
-      <section id="contact" className="section contact-section">
+      <RevealSection id="contact" className="section contact-section reveal-section">
         <div className="container contact-grid">
           <div className="contact-panel">
             <p className="section-kicker">Contact</p>
@@ -599,45 +844,72 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p className="section-lede">{marketingText}</p>
 
             <div className="contact-links">
-              {data.phone && (
+              {data.phone ? (
                 <a className="contact-link" href={`tel:${data.phone}`}>
-                  <span className="contact-link-icon"><Icon name="phone" /></span>
+                  <span className="contact-link-icon">
+                    <Icon name="phone" />
+                  </span>
                   <span className="contact-link-text">
                     <span>Phone</span>
                     <strong>{data.phone}</strong>
                   </span>
                 </a>
+              ) : (
+                <div className="contact-link contact-link--muted">
+                  <span className="contact-link-icon">
+                    <Icon name="phone" />
+                  </span>
+                  <span className="contact-link-text">
+                    <span>Phone</span>
+                    <strong>Not listed yet</strong>
+                  </span>
+                </div>
               )}
-              {data.contactEmail && (
+
+              {data.contactEmail ? (
                 <a className="contact-link" href={`mailto:${data.contactEmail}`}>
-                  <span className="contact-link-icon"><Icon name="mail" /></span>
+                  <span className="contact-link-icon">
+                    <Icon name="mail" />
+                  </span>
                   <span className="contact-link-text">
                     <span>Email</span>
                     <strong>{data.contactEmail}</strong>
                   </span>
                 </a>
+              ) : (
+                <div className="contact-link contact-link--muted">
+                  <span className="contact-link-icon">
+                    <Icon name="mail" />
+                  </span>
+                  <span className="contact-link-text">
+                    <span>Email</span>
+                    <strong>Not listed yet</strong>
+                  </span>
+                </div>
               )}
+
               <a className="contact-link" href={mapsUrl} target="_blank" rel="noreferrer">
-                <span className="contact-link-icon"><Icon name="pin" /></span>
+                <span className="contact-link-icon">
+                  <Icon name="pin" />
+                </span>
                 <span className="contact-link-text">
                   <span>Location</span>
-                  <strong>Get directions</strong>
+                  <strong>Get directions on Google Maps</strong>
                 </span>
               </a>
-              {!hasDirectContact && (
-                <p className="contact-hint">No phone or email on file yet — directions are the best way to reach us for now.</p>
-              )}
             </div>
 
-            {data.socialLinks && data.socialLinks.length > 0 && (
+            {hasSocial ? (
               <div className="social-row">
-                {data.socialLinks.map((link) => (
+                {data.socialLinks!.map((link) => (
                   <a className="social-link" href={link.url} key={`${link.platform}-${link.url}`} target="_blank" rel="noreferrer">
                     <Icon name={getSocialIconName(link.platform)} />
                     {getSocialLabel(link.platform)}
                   </a>
                 ))}
               </div>
+            ) : (
+              <p className="contact-hint">Follow us on social media — links will appear here once the owner adds them.</p>
             )}
           </div>
 
@@ -647,11 +919,11 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             </div>
             <div className="hours-body">
               <span>Availability</span>
-              <h3>{data.workingDays || 'Contact for availability'}</h3>
-              <p>
-                {data.businessHoursOpen && data.businessHoursClose
-                  ? `${data.businessHoursOpen} – ${data.businessHoursClose}`
-                  : 'Message the brand directly to confirm hours and current availability.'}
+              <h3>{workingDaysLabel}</h3>
+              <p>{hoursLabel}</p>
+              <p className={`hours-status${status.isOpen ? '' : ' hours-status--closed'}`}>
+                <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
+                {status.text}
               </p>
               <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
                 Message now
@@ -660,13 +932,43 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             </div>
           </aside>
         </div>
-      </section>
+      </RevealSection>
 
       <footer>
-        <div className="container">
-          © {new Date().getFullYear()} {data.businessName} · Powered by BuildBusinessLK
+        <div className="container footer-inner">
+          <div className="footer-brand">
+            <span className="footer-mark">{initials}</span>
+            <div>
+              <strong>{data.businessName}</strong>
+              <span>{sector} · Sri Lanka</span>
+            </div>
+          </div>
+          <nav className="footer-nav" aria-label="Footer">
+            {navSections.map((section) => (
+              <a key={section.href} href={section.href}>
+                {section.label}
+              </a>
+            ))}
+          </nav>
+          <p className="footer-meta">© {new Date().getFullYear()} {data.businessName} · Powered by BuildBusinessLK</p>
         </div>
       </footer>
+
+      {hasDirectContact && (
+        <a
+          className="fab-contact"
+          href={contactHref}
+          target={contactHref.startsWith('http') ? '_blank' : undefined}
+          rel="noreferrer"
+          aria-label={data.phone ? 'Message on WhatsApp' : 'Send email'}
+        >
+          <Icon name={data.phone ? 'whatsapp' : 'mail'} />
+        </a>
+      )}
+
+      <button type="button" className={`scroll-top${showTop ? ' is-visible' : ''}`} onClick={scrollToTop} aria-label="Back to top">
+        <Icon name="chevron-up" />
+      </button>
     </main>
   );
 }
