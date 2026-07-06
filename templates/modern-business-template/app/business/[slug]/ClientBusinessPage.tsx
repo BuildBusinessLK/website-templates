@@ -39,8 +39,9 @@ export interface BusinessData {
   googleMapsUrl?: string;
 }
 
-const DEFAULT_PRIMARY = '#1f8a4c';
-const DEFAULT_SECONDARY = '#e0632f';
+const DEFAULT_PRIMARY = '#FF6B35';
+const DEFAULT_SECONDARY = '#F59E0B';
+const HOME_HERO_IMAGE = '/brand-home-bg.png';
 
 type MotifId = 'harvest' | 'weave' | 'bloom' | 'grove' | 'grid' | 'tide';
 
@@ -462,9 +463,7 @@ function SmartImage({
 function HeroBackdrop({ motif }: { motif: MotifId }) {
   return (
     <div className="hero-backdrop" aria-hidden="true">
-      <div className="hero-orb hero-orb--primary" />
-      <div className="hero-orb hero-orb--secondary" />
-      <div className="hero-orb hero-orb--accent" />
+      <div className="hero-home-image" style={{ backgroundImage: `url("${HOME_HERO_IMAGE}")` }} />
       <div className={`hero-motif hero-motif--${motif}`} />
     </div>
   );
@@ -685,24 +684,17 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                 </a>
               )}
             </div>
+            <div className="hero-meta-row" aria-label="Business highlights">
+              <span>{marketText}</span>
+              <span>{hoursLabel}</span>
+            </div>
           </div>
 
-          <aside className="hero-panel reveal-on-load reveal-delay-1" aria-label="Brand summary">
-            <div className="hero-panel-media">
-              <SmartImage
-                src={data.coverImageUrl}
-                alt={`${data.businessName} brand visual`}
-                motif={motif}
-                label={initials}
-              />
-            </div>
-            <div className="hero-panel-body">
-              <span>{sector}</span>
-              <h2>{marketText}</h2>
-              <p>{marketingText}</p>
-            </div>
-          </aside>
+          
         </div>
+        <a className="hero-scroll-cue" href="#story" aria-label="Scroll to story">
+          <span />
+        </a>
       </header>
 
       <div className="trust-bar">
