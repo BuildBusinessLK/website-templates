@@ -36,6 +36,7 @@ interface BusinessData {
   businessHoursClose?: string;
   workingDays?: string;
   googleMapsUrl?: string;
+  intentMessage?: string;
 }
 
 async function fetchBusiness(slug: string): Promise<BusinessData | null> {

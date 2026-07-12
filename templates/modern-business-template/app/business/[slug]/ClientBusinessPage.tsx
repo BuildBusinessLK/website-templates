@@ -37,6 +37,7 @@ export interface BusinessData {
   businessHoursClose?: string;
   workingDays?: string;
   googleMapsUrl?: string;
+  intentMessage?: string;
 }
 
 const DEFAULT_PRIMARY = '#FF6B35';
@@ -533,8 +534,48 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  const trackClick = async (eventType: 'whatsapp_click' | 'directions_click', url: string, isBlank: boolean) => {
+    try {
+      const base = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8083').replace(/\/$/, '');
+      await fetch(`${base}/api/public/business/${encodeURIComponent(data.websiteSlug || '')}/click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType }),
+      });
+    } catch (e) {
+      console.error('Click tracking failed', e);
+    } finally {
+      if (url && url !== '#') {
+        if (isBlank) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        } else {
+          window.location.href = url;
+        }
+      }
+    }
+  };
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, eventType?: 'whatsapp_click' | 'directions_click') => {
+    const href = e.currentTarget.href;
+    const target = e.currentTarget.target;
+    
+    let resolvedType = eventType;
+    if (!resolvedType) {
+      if (href.includes('wa.me')) resolvedType = 'whatsapp_click';
+      else if (href.includes('google.com/maps') || href.includes('maps.google')) resolvedType = 'directions_click';
+    }
+
+    if (resolvedType) {
+      e.preventDefault();
+      trackClick(resolvedType, href, target === '_blank');
+    }
+  };
+
+  const defaultIntentMessage = 'Hello, I would like to inquire about your products';
+  const whatsappText = data.intentMessage?.trim() || defaultIntentMessage;
+
   const contactHref = data.phone
-    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(`Hello ${data.businessName}, I found your website and would like to learn more.`)}`
+    ? `https://wa.me/${formatPhoneNumber(data.phone)}?text=${encodeURIComponent(whatsappText)}`
     : data.contactEmail
       ? `mailto:${data.contactEmail}?subject=${encodeURIComponent(`Inquiry for ${data.businessName}`)}`
       : '#contact';
@@ -632,7 +673,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                 {section.label}
               </a>
             ))}
-            <a className="nav-cta" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+            <a className="nav-cta" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
               Get in touch
             </a>
           </div>
@@ -650,7 +691,10 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               href={contactHref}
               target={contactHref.startsWith('http') ? '_blank' : undefined}
               rel="noreferrer"
-              onClick={() => setNavOpen(false)}
+              onClick={(e) => {
+                setNavOpen(false);
+                handleLinkClick(e);
+              }}
             >
               Get in touch
             </a>
@@ -670,7 +714,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <h1>{data.businessName}</h1>
             <p className="hero-copy">{heroText}</p>
             <div className="hero-actions">
-              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
                 Contact the brand
                 <Icon name="arrow" />
               </a>
@@ -742,14 +786,16 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p>{marketingText}</p>
           </div>
           <div className="cta-band-actions">
-            <a className="button button-primary button-light" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+            <a className="button button-primary button-light" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
               {data.phone ? 'Message on WhatsApp' : data.contactEmail ? 'Send an email' : 'Go to contact'}
               <Icon name="arrow" />
             </a>
-            <a className="button button-ghost" href={mapsUrl} target="_blank" rel="noreferrer">
-              <Icon name="pin" />
-              Get directions
-            </a>
+            {data.googleMapsUrl && (
+              <a className="button button-ghost" href={mapsUrl} target="_blank" rel="noreferrer" onClick={(e) => handleLinkClick(e, 'directions_click')}>
+                <Icon name="pin" />
+                Get directions
+              </a>
+            )}
           </div>
         </div>
       </RevealSection>
@@ -789,7 +835,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                       <p className="price">
                         {product.price != null ? `From LKR ${product.price.toLocaleString()}` : 'Price on request'}
                       </p>
-                      <a className="text-link" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+                      <a className="text-link" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
                         Ask more <Icon name="arrow" />
                       </a>
                     </div>
@@ -836,7 +882,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p className="section-lede">{marketingText}</p>
 
             <div className="contact-links">
-              {data.phone ? (
+              {data.phone && (
                 <a className="contact-link" href={`tel:${data.phone}`}>
                   <span className="contact-link-icon">
                     <Icon name="phone" />
@@ -846,19 +892,9 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                     <strong>{data.phone}</strong>
                   </span>
                 </a>
-              ) : (
-                <div className="contact-link contact-link--muted">
-                  <span className="contact-link-icon">
-                    <Icon name="phone" />
-                  </span>
-                  <span className="contact-link-text">
-                    <span>Phone</span>
-                    <strong>Not listed yet</strong>
-                  </span>
-                </div>
               )}
 
-              {data.contactEmail ? (
+              {data.contactEmail && (
                 <a className="contact-link" href={`mailto:${data.contactEmail}`}>
                   <span className="contact-link-icon">
                     <Icon name="mail" />
@@ -868,30 +904,22 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                     <strong>{data.contactEmail}</strong>
                   </span>
                 </a>
-              ) : (
-                <div className="contact-link contact-link--muted">
-                  <span className="contact-link-icon">
-                    <Icon name="mail" />
-                  </span>
-                  <span className="contact-link-text">
-                    <span>Email</span>
-                    <strong>Not listed yet</strong>
-                  </span>
-                </div>
               )}
 
-              <a className="contact-link" href={mapsUrl} target="_blank" rel="noreferrer">
-                <span className="contact-link-icon">
-                  <Icon name="pin" />
-                </span>
-                <span className="contact-link-text">
-                  <span>Location</span>
-                  <strong>Get directions on Google Maps</strong>
-                </span>
-              </a>
+              {data.googleMapsUrl && (
+                <a className="contact-link" href={mapsUrl} target="_blank" rel="noreferrer" onClick={(e) => handleLinkClick(e, 'directions_click')}>
+                  <span className="contact-link-icon">
+                    <Icon name="pin" />
+                  </span>
+                  <span className="contact-link-text">
+                    <span>Location</span>
+                    <strong>Get directions on Google Maps</strong>
+                  </span>
+                </a>
+              )}
             </div>
 
-            {hasSocial ? (
+            {hasSocial && (
               <div className="social-row">
                 {data.socialLinks!.map((link) => (
                   <a className="social-link" href={link.url} key={`${link.platform}-${link.url}`} target="_blank" rel="noreferrer">
@@ -900,8 +928,6 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                   </a>
                 ))}
               </div>
-            ) : (
-              <p className="contact-hint">Follow us on social media — links will appear here once the owner adds them.</p>
             )}
           </div>
 
@@ -917,7 +943,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
                 <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
                 {status.text}
               </p>
-              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer">
+              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
                 Message now
                 <Icon name="arrow" />
               </a>
@@ -953,6 +979,7 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
           target={contactHref.startsWith('http') ? '_blank' : undefined}
           rel="noreferrer"
           aria-label={data.phone ? 'Message on WhatsApp' : 'Send email'}
+          onClick={handleLinkClick}
         >
           <Icon name={data.phone ? 'whatsapp' : 'mail'} />
         </a>
