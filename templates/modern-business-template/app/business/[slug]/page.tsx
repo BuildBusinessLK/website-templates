@@ -43,7 +43,8 @@ async function fetchBusiness(slug: string): Promise<BusinessData | null> {
   const base = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8083').replace(/\/$/, '');
   try {
     const res = await fetch(`${base}/api/public/business/${encodeURIComponent(slug)}`, {
-      next: { revalidate: 60 },
+      // Always fetch fresh data — no cache so color/content changes are instant
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();
