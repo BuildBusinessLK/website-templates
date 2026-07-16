@@ -709,8 +709,9 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
             <p className="eyebrow">
               <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
               {status.text}
+              <span style={{ opacity: 0.5, margin: '0 2px' }}>·</span>
+              <span style={{ opacity: 0.75 }}>{sector}</span>
             </p>
-            <p className="section-kicker">{sector}</p>
             <h1>{data.businessName}</h1>
             <p className="hero-copy">{heroText}</p>
             <div className="hero-actions">
@@ -736,9 +737,6 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
 
           
         </div>
-        <a className="hero-scroll-cue" href="#story" aria-label="Scroll to story">
-          <span />
-        </a>
       </header>
 
       <div className="trust-bar">
@@ -939,14 +937,16 @@ export default function ClientBusinessPage({ data }: { data: BusinessData }) {
               <span>Availability</span>
               <h3>{workingDaysLabel}</h3>
               <p>{hoursLabel}</p>
-              <p className={`hours-status${status.isOpen ? '' : ' hours-status--closed'}`}>
-                <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
-                {status.text}
-              </p>
-              <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
-                Message now
-                <Icon name="arrow" />
-              </a>
+              <div className="hours-action-row">
+                <p className={`hours-status${status.isOpen ? '' : ' hours-status--closed'}`}>
+                  <span className={status.isOpen ? 'status-dot' : 'status-dot closed'} />
+                  {status.text}
+                </p>
+                <a className="button button-primary" href={contactHref} target={contactHref.startsWith('http') ? '_blank' : undefined} rel="noreferrer" onClick={handleLinkClick}>
+                  Message now
+                  <Icon name="arrow" />
+                </a>
+              </div>
             </div>
           </aside>
         </div>
